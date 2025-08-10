@@ -42,12 +42,22 @@ git push -u origin main
 - Ensure all dependencies are in `requirements.txt`
 - Make sure the main file path is correct
 
+#### OpenCV Import Error Fix
+If you see an OpenCV import error during deployment:
+1. The `packages.txt` file provides system dependencies
+2. The `requirements.txt` uses compatible OpenCV version (4.8.1.78)
+3. The `.streamlit/config.toml` ensures proper configuration
+4. These files are now included in your repository
+
 ## Repository Structure
 ```
 people-counter-app/
 ├── people_counter.py      # Main application
 ├── tracker.py            # Tracking utilities
 ├── requirements.txt      # Python dependencies
+├── packages.txt          # System dependencies for OpenCV
+├── .streamlit/
+│   └── config.toml      # Streamlit configuration
 ├── README.md            # Project documentation
 ├── .gitignore           # Git ignore rules
 └── DEPLOYMENT.md        # This file
