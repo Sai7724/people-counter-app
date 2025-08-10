@@ -45,9 +45,11 @@ git push -u origin main
 #### OpenCV Import Error Fix
 If you see an OpenCV import error during deployment:
 1. The `packages.txt` file provides system dependencies
-2. The `requirements.txt` uses compatible OpenCV version (4.8.1.78)
+2. The `requirements.txt` uses compatible OpenCV version (4.5.5.64)
 3. The `.streamlit/config.toml` ensures proper configuration
-4. These files are now included in your repository
+4. The `runtime.txt` specifies Python 3.11 for better compatibility
+5. The `setup.sh` script helps with system dependency installation
+6. If still failing, try `requirements-alt.txt` with older OpenCV versions
 
 ## Repository Structure
 ```
