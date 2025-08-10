@@ -748,7 +748,10 @@ class PeopleCounter:
             st.session_state.webcam_initialized = False
             
             # Clear any existing video capture objects
-            cv2.destroyAllWindows()
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
             
             st.success("🛑 Webcam stopped successfully!")
             
