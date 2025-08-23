@@ -47,6 +47,10 @@ class PeopleCounter:
             st.session_state.webcam_initialized = False
         if 'video_maximized' not in st.session_state:
             st.session_state.video_maximized = False
+        if 'camera_index' not in st.session_state:
+            st.session_state.camera_index = 0
+        if 'fullscreen' not in st.session_state:
+            st.session_state.fullscreen = False
             
         self.model = st.session_state.model
         self.tracker = None
@@ -61,6 +65,15 @@ class PeopleCounter:
         """Add CSS styling for maximize/minimize functionality and responsive design."""
         st.markdown("""
         <style>
+        .fullscreen-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            background: black;
+        }
         /* Responsive Design */
         @media (max-width: 768px) {
             .main-header {
@@ -297,7 +310,11 @@ class PeopleCounter:
                 process_every_n_frames = st.slider("Process Every N Frames", 1, 10, 5, 1)
                 
                 # Webcam status
-                st.subheader("📷 Webcam Status")
+                st.subheader("📷 Webcam Settings")
+                camera_options = {"Front Camera": 0, "Back Camera": 1}
+                selected_camera = st.selectbox("Select Camera", list(camera_options.keys()))
+                st.session_state.camera_index = camera_options[selected_camera]
+
                 if st.session_state.webcam_initialized:
                     st.success("✅ Webcam Connected")
                 else:
@@ -396,7 +413,7 @@ class PeopleCounter:
                 if st.button("🚀 Start Counting", type="primary", key="upload_start"):
                     self.start_counting(video_path, confidence, max_disappeared, max_distance, process_every_n_frames)
         elif option == "Use Webcam":
-            video_path = 0  # Webcam
+            video_path = st.session_state.camera_index  # Webcam
             
             # Check webcam availability
             if self.check_webcam_availability():
@@ -423,22 +440,24 @@ class PeopleCounter:
                             self.stop_webcam()
                 
                 # Secondary controls row
-                col3, col4 = st.columns(2)
+                col3, col4, col5 = st.columns(3)
                 with col3:
                     if st.button("⏸️ Pause/Resume", type="secondary", key="webcam_pause", use_container_width=True):
                         if st.session_state.webcam_active:
                             st.session_state.webcam_pause_requested = not st.session_state.webcam_pause_requested
-                            st.rerun()
                 
                 with col4:
                     if st.button("🔄 Reconnect", type="secondary", key="webcam_reconnect", use_container_width=True):
                         with st.spinner("Reconnecting to webcam..."):
-                            if self.reconnect_webcam():
+                            if self.reconnect_webcam(st.session_state.camera_index):
                                 st.session_state.webcam_initialized = True
                                 st.success("✅ Webcam reconnected successfully!")
                                 st.rerun()
                             else:
                                 st.error("❌ Failed to reconnect. Please check your camera connection.")
+                with col5:
+                    if st.button("Toggle Fullscreen", type="secondary", key="webcam_fullscreen", use_container_width=True):
+                        st.session_state.fullscreen = not st.session_state.fullscreen
             else:
                 st.error("❌ Webcam is not accessible. Please check your camera connection and permissions.")
                 
@@ -456,7 +475,7 @@ class PeopleCounter:
                     # Try to reconnect button
                     if st.button("🔄 Try to Reconnect", type="primary", key="troubleshoot_reconnect"):
                         with st.spinner("Attempting to reconnect..."):
-                            if self.reconnect_webcam():
+                            if self.reconnect_webcam(st.session_state.camera_index):
                                 st.success("✅ Webcam reconnected successfully!")
                                 st.rerun()
                             else:
@@ -762,93 +781,49 @@ class PeopleCounter:
             st.session_state.webcam_pause_requested = False
             st.session_state.webcam_initialized = False
     
-    def reconnect_webcam(self):
-        """Attempt to reconnect to the webcam."""
-        try:
-            # Release existing connection
-            if self.vs is not None:
-                self.vs.release()
-                self.vs = None
-            
-            # Wait a moment for cleanup
-            time.sleep(1.0)
-            
-            # Try multiple camera indices and backends for better compatibility
-            camera_connected = False
-            
-            # Try DirectShow first (Windows-specific, better compatibility)
+    def reconnect_webcam(self, camera_index=0):
+        """Attempt to reconnect to the webcam with more robust error handling."""
+        st.info("Attempting to reconnect to webcam...")
+        
+        # Release any existing connection
+        if self.vs is not None:
             try:
-                self.vs = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                self.vs.release()
+                st.info("Released existing webcam connection.")
+            except Exception as e:
+                st.warning(f"Error releasing existing webcam connection: {str(e)}")
+            finally:
+                self.vs = None
+
+        # Wait a moment for cleanup
+        time.sleep(0.5)
+
+        backends_to_try = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
+
+        for backend in backends_to_try:
+            try:
+                st.info(f"Trying camera index {camera_index} with backend {backend}...")
+                self.vs = cv2.VideoCapture(camera_index, backend)
                 if self.vs.isOpened():
                     ret, frame = self.vs.read()
                     if ret and frame is not None:
-                        camera_connected = True
-                        # Reset frame position
-                        self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        st.success(f"Successfully connected to camera index {camera_index} with backend {backend}!")
+                        st.session_state.webcam_stop_requested = False
+                        st.session_state.webcam_pause_requested = False
+                        st.session_state.webcam_initialized = True
+                        return True
                     else:
                         self.vs.release()
                         self.vs = None
-            except:
-                pass
-            
-            # If DirectShow failed, try default backend
-            if not camera_connected:
-                try:
-                    self.vs = cv2.VideoCapture(0)
-                    if self.vs.isOpened():
-                        ret, frame = self.vs.read()
-                        if ret and frame is not None:
-                            camera_connected = True
-                            # Reset frame position
-                            self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        else:
-                            self.vs.release()
-                            self.vs = None
-                except:
-                    pass
-            
-            # Try alternative camera indices if primary fails
-            if not camera_connected:
-                for camera_index in [1, 2]:
-                    try:
-                        self.vs = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-                        if self.vs.isOpened():
-                            ret, frame = self.vs.read()
-                            if ret and frame is not None:
-                                camera_connected = True
-                                break
-                            else:
-                                self.vs.release()
-                                self.vs = None
-                    except:
-                        pass
-                    
-                    if not camera_connected:
-                        try:
-                            self.vs = cv2.VideoCapture(camera_index)
-                            if self.vs.isOpened():
-                                ret, frame = self.vs.read()
-                                if ret and frame is not None:
-                                    camera_connected = True
-                                    break
-                                else:
-                                    self.vs.release()
-                                    self.vs = None
-                        except:
-                            pass
-            
-            if camera_connected:
-                # Reset webcam state
-                st.session_state.webcam_stop_requested = False
-                st.session_state.webcam_pause_requested = False
-                st.session_state.webcam_initialized = True
-                return True
-            else:
-                return False
-                
-        except Exception as e:
-            st.error(f"Error reconnecting to webcam: {str(e)}")
-            return False
+                        st.warning(f"Could connect to camera index {camera_index} with backend {backend}, but failed to read a frame.")
+            except Exception as e:
+                st.warning(f"Failed to connect with camera index {camera_index} and backend {backend}: {str(e)}")
+                if self.vs is not None:
+                    self.vs.release()
+                    self.vs = None
+        
+        st.error("Failed to connect to any available webcam.")
+        return False
 
     def check_webcam_availability(self):
         """Check if webcam is available and accessible."""
@@ -943,14 +918,14 @@ class PeopleCounter:
             
         try:
             # Initialize video capture
-            if video_path == 0:  # Webcam
+            if isinstance(video_path, int):  # Webcam
                 # Try DirectShow first on Windows, then fallback
                 try:
-                    self.vs = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    self.vs = cv2.VideoCapture(video_path, cv2.CAP_DSHOW)
                     if not self.vs.isOpened():
-                        self.vs = cv2.VideoCapture(0)  # Fallback to default
+                        self.vs = cv2.VideoCapture(video_path)  # Fallback to default
                 except:
-                    self.vs = cv2.VideoCapture(0)  # Fallback to default
+                    self.vs = cv2.VideoCapture(video_path)  # Fallback to default
             else:
                 self.vs = cv2.VideoCapture(video_path)
                 
@@ -975,8 +950,12 @@ class PeopleCounter:
             status_text = st.empty()
             
             # Video display
+            video_container = st.container()
+            if st.session_state.fullscreen:
+                video_container.markdown('<div class="fullscreen-video">', unsafe_allow_html=True)
+            video_placeholder = video_container.empty()
+
             st.subheader("🎬 Live Processing")
-            video_placeholder = st.empty()
             
             # Simple replay button during processing
             st.subheader("🎬 Processing Controls")
@@ -985,7 +964,7 @@ class PeopleCounter:
             with col1:
                 replay_button = st.button("🔄 Start Replay", type="primary", key="live_replay")
             with col2:
-                if video_path == 0:  # Only show stop for webcam
+                if isinstance(video_path, int):  # Only show stop for webcam
                     if st.button("⏹️ Stop Processing", type="secondary", key="live_stop"):
                         st.session_state.webcam_stop_requested = True
             
@@ -1025,7 +1004,7 @@ class PeopleCounter:
                 ret, frame = self.vs.read()
                 if not ret:
                     consecutive_failures += 1
-                    if video_path == 0:  # Webcam
+                    if isinstance(video_path, int):  # Webcam
                         if consecutive_failures >= max_consecutive_failures:
                             st.error(f"⚠️ Failed to read from webcam {consecutive_failures} times consecutively. Stopping.")
                             break
@@ -1120,7 +1099,7 @@ class PeopleCounter:
                     status_text.text(f"Processing frame {frame_count}")
                 
                 # Add a small delay for webcam or video file
-                if video_path == 0:
+                if isinstance(video_path, int):
                     time.sleep(0.01) # A small delay for webcam to feel responsive
                 else:
                     # For video files, use the actual FPS to control playback speed
@@ -1130,6 +1109,8 @@ class PeopleCounter:
                         time.sleep(1 / 30) # Default to 30 FPS if FPS is not available
             
             # Cleanup
+            if st.session_state.fullscreen:
+                video_container.markdown('</div>', unsafe_allow_html=True)
             if self.vs is not None:
                 self.vs.release()
                 self.vs = None
@@ -1174,7 +1155,7 @@ class PeopleCounter:
                     st.subheader("🔧 Webcam Controls")
                     if st.button("🔄 Reconnect Webcam", type="secondary", key="post_reconnect"):
                         with st.spinner("Reconnecting webcam..."):
-                            if self.reconnect_webcam():
+                            if self.reconnect_webcam(st.session_state.camera_index):
                                 st.success("✅ Webcam reconnected!")
                                 st.rerun()
                             else:
@@ -1197,7 +1178,7 @@ class PeopleCounter:
             
         except Exception as e:
             st.error(f"❌ Error during processing: {str(e)}")
-            if video_path == 0:
+            if isinstance(video_path, int):
                 st.error("Please check your webcam connection and permissions.")
             else:
                 st.error("Please check your video file and try again.")
