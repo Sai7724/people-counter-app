@@ -135,3 +135,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 - YOLOv8 by Ultralytics for object detection
 - OpenCV community for computer vision tools
 - Streamlit team for the web framework
+"# people-counter-app" 
