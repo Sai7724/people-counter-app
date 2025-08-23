@@ -1119,9 +1119,15 @@ class PeopleCounter:
                 else:
                     status_text.text(f"Processing frame {frame_count}")
                 
-                # Add a small delay for webcam
+                # Add a small delay for webcam or video file
                 if video_path == 0:
-                    time.sleep(0.1)
+                    time.sleep(0.01) # A small delay for webcam to feel responsive
+                else:
+                    # For video files, use the actual FPS to control playback speed
+                    if fps > 0:
+                        time.sleep(1 / fps)
+                    else:
+                        time.sleep(1 / 30) # Default to 30 FPS if FPS is not available
             
             # Cleanup
             if self.vs is not None:
