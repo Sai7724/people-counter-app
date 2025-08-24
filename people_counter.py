@@ -406,6 +406,16 @@ class PeopleCounter:
                     self.start_counting(video_path, confidence, max_disappeared, max_distance, process_every_n_frames)
         elif option == "Use Webcam":
             st.subheader("📷 Webcam Live Feed")
+        st.warning(
+            """
+            **🔒 Secure Connection Required for Webcam Access**
+
+            For the webcam to work, your browser requires a secure connection (HTTPS).
+            Please ensure the URL in your browser's address bar starts with `https://`.
+
+            If you are the developer, please ensure your deployment environment is configured to use HTTPS.
+            """
+        )
             
             class VideoTransformer(VideoTransformerBase):
                 def __init__(self):
