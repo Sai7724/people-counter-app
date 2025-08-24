@@ -7,7 +7,6 @@ from tracker import SimpleCentroidTracker, SimpleTrackableObject
 import os
 import time
 import threading
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
 
 class PeopleCounter:
     """Main people counter application class."""
@@ -400,118 +399,15 @@ class PeopleCounter:
                 tfile.write(uploaded_file.read())
                 video_path = tfile.name
                 st.success(f"✅ Video uploaded: {uploaded_file.name}")
-                
+
                 # Start counting button for uploaded video
                 if st.button("🚀 Start Counting", type="primary", key="upload_start"):
                     self.start_counting(video_path, confidence, max_disappeared, max_distance, process_every_n_frames)
         elif option == "Use Webcam":
-            st.subheader("📷 Webcam Live Feed")
-        st.warning(
-            """
-            **🔒 Secure Connection Required for Webcam Access**
-
-            For the webcam to work, your browser requires a secure connection (HTTPS).
-            Please ensure the URL in your browser's address bar starts with `https://`.
-
-            If you are the developer, please ensure your deployment environment is configured to use HTTPS.
-            """
-        )
-            
-            class VideoTransformer(VideoTransformerBase):
-                def __init__(self):
-                    self.confidence = confidence
-                    self.max_disappeared = max_disappeared
-                    self.max_distance = max_distance
-                    self.process_every_n_frames = process_every_n_frames
-                    self.model = self.load_model()
-                    self.tracker = SimpleCentroidTracker(max_disappeared=self.max_disappeared, max_distance=self.max_distance)
-                    self.trackable_objects = {}
-                    self.total_up = 0
-                    self.total_down = 0
-                    self.frame_count = 0
-
-                def load_model(self):
-                    """Load YOLO model with error handling."""
-                    try:
-                        model = YOLO("yolov8n.pt")
-                        return model
-                    except Exception as e:
-                        st.error(f"Failed to load YOLO model: {str(e)}")
-                        return None
-
-                def recv(self, frame):
-                    if not self.model:
-                        return frame.to_ndarray(format="bgr24")
-
-                    frm = frame.to_ndarray(format="bgr24")
-                    
-                    # Resize frame for consistent processing
-                    frm = cv2.resize(frm, (600, 400))
-                    rectangles = []
-
-                    # Process every N frames for performance
-                    if self.frame_count % self.process_every_n_frames == 0:
-                        try:
-                            results = self.model.predict(frm, conf=self.confidence, verbose=False)
-                            person_detections = results[0].boxes.data[results[0].boxes.cls == 0]
-                            
-                            for det in person_detections:
-                                x1, y1, x2, y2 = map(int, det[:4])
-                                rectangles.append((x1, y1, x2, y2))
-                                cv2.rectangle(frm, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                        except Exception as e:
-                            st.error(f"Detection error: {str(e)}")
-                    
-                    # Update tracker
-                    objects = self.tracker.update(rectangles)
-                    
-                    # Process tracked objects
-                    for (object_id, centroid) in objects.items():
-                        to = self.trackable_objects.get(object_id, None)
-                        if to is None:
-                            to = SimpleTrackableObject(object_id, centroid)
-                        else:
-                            # Calculate direction
-                            y_coords = [c[1] for c in to.centroids]
-                            if len(y_coords) > 0:
-                                direction = centroid[1] - np.mean(y_coords)
-                                to.centroids.append(centroid)
-                                
-                                # Count crossing the line
-                                if not to.counted:
-                                    if direction < 0 and centroid[1] < frm.shape[0] // 2:
-                                        self.total_up += 1
-                                        to.counted = True
-                                    elif direction > 0 and centroid[1] > frm.shape[0] // 2:
-                                        self.total_down += 1
-                                        to.counted = True
-                        
-                        self.trackable_objects[object_id] = to
-                        
-                        # Draw tracking info
-                        cv2.putText(frm, f"ID {object_id}", (centroid[0] - 10, centroid[1] - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                        cv2.circle(frm, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
-                    
-                    # Draw counting line
-                    cv2.line(frm, (0, frm.shape[0] // 2), (frm.shape[1], frm.shape[0] // 2), (0, 255, 255), 2)
-                    
-                    # Display counts on frame
-                    cv2.putText(frm, f"Up: {self.total_up} | Down: {self.total_down}", (10, 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-                    self.frame_count += 1
-                    
-                    return frm
-
-            webrtc_ctx = webrtc_streamer(
-                key="people-counter",
-                video_transformer_factory=VideoTransformer,
-                rtc_configuration=RTCConfiguration(
-                    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-                ),
-                media_stream_constraints={"video": True, "audio": False},
-            )
+            st.info("Select your webcam below and click 'Start Counting'.")
+            st.session_state.camera_index = st.selectbox("Select Camera", range(5), index=st.session_state.camera_index, key="camera_select")
+            if st.button("🚀 Start Counting", type="primary", key="webcam_start"):
+                self.start_counting(st.session_state.camera_index, confidence, max_disappeared, max_distance, process_every_n_frames)
         
         # Show processing status
         if st.session_state.get('processing', False):
