@@ -383,7 +383,11 @@ class PeopleCounter:
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            option = st.radio("Select Input Source", ["Upload Video", "Use Webcam"], 
+            input_options = ["Upload Video"]
+            if os.environ.get("STREAMLIT_SERVER_PORT") is None: # Only show webcam option if not in cloud
+                input_options.append("Use Webcam")
+            
+            option = st.radio("Select Input Source", input_options, index=0, 
                              help="Choose between uploading a video file or using your webcam")
         
         with col2:
